@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "نظام الغزالي للمحاسبة",
+  "short_name": "الغزالي",
+  "description": "نظام الغزالي للمحاسبة وإدارة الفواتير",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef2fb",
+  "theme_color": "#403b8f",
+  "icons": [
+    {
+      "src": "icons/ghazali-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

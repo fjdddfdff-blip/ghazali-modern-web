@@ -1878,3 +1878,97 @@ body.dashboard-page .global-footer{display:none!important;}
   .dash-cards { grid-template-columns: 1fr 1fr; }
   .stat-box { font-size: .68rem !important; padding: 5px 6px !important; }
 }
+
+.install-app-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  direction: rtl;
+  background: rgba(14, 14, 38, .74);
+  backdrop-filter: blur(8px);
+}
+
+.install-app-card {
+  width: min(470px, 100%);
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  gap: 14px 18px;
+  align-items: center;
+  padding: 22px;
+  color: #232356;
+  background: linear-gradient(145deg, #ffffff, #eef2fb);
+  border: 1px solid rgba(255, 255, 255, .9);
+  border-radius: 24px;
+  box-shadow: 0 18px 50px rgba(10, 10, 40, .45), inset 0 1px 0 #fff;
+}
+
+.install-app-icon {
+  width: 86px;
+  height: 86px;
+  border-radius: 22px;
+  filter: drop-shadow(0 8px 9px rgba(50, 44, 125, .28));
+}
+
+.install-app-copy h2 {
+  margin: 0 0 7px;
+  font-size: 1.25rem;
+  color: #29265f;
+}
+
+.install-app-copy p {
+  margin: 0;
+  font-size: .9rem;
+  line-height: 1.65;
+  color: #565775;
+}
+
+.install-app-copy .install-app-help {
+  margin-top: 8px;
+  padding: 8px 10px;
+  color: #1e6258;
+  background: #dff8f1;
+  border-radius: 10px;
+}
+
+.install-app-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.install-app-actions .btn {
+  width: 100% !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  font-weight: 900 !important;
+}
+
+.install-app-confirm {
+  color: #fff !important;
+  background: linear-gradient(180deg, #6159e8, #4239bd) !important;
+  border-color: #736cf0 !important;
+  box-shadow: 0 4px 0 #28237d, 0 8px 15px rgba(46, 40, 135, .2) !important;
+}
+
+.install-app-skip {
+  color: #343558 !important;
+  background: linear-gradient(180deg, #fff, #e3e8f4) !important;
+  border-color: #cbd2e3 !important;
+  box-shadow: 0 4px 0 #b8bfd0 !important;
+}
+
+@media screen and (max-width: 480px) {
+  .install-app-card {
+    grid-template-columns: 64px 1fr;
+    gap: 12px;
+    padding: 18px 15px;
+    border-radius: 20px;
+  }
+  .install-app-icon { width: 64px; height: 64px; border-radius: 17px; }
+  .install-app-copy h2 { font-size: 1.05rem; }
+  .install-app-copy p { font-size: .8rem; }
+}

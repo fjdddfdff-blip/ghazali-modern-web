@@ -1,4 +1,69 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+function InstallAppPrompt() {
+  const [installEvent, setInstallEvent] = useState(null);
+  const [visible, setVisible] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+
+  useEffect(() => {
+    const isInstalled = window.matchMedia("(display-mode: standalone)").matches
+      || window.navigator.standalone === true;
+    if (isInstalled || sessionStorage.getItem("ghazali-install-skipped") === "1") return undefined;
+
+    const openPrompt = window.setTimeout(() => setVisible(true), 650);
+    const captureInstall = (event) => {
+      event.preventDefault();
+      setInstallEvent(event);
+      setVisible(true);
+    };
+    const hideAfterInstall = () => setVisible(false);
+
+    window.addEventListener("beforeinstallprompt", captureInstall);
+    window.addEventListener("appinstalled", hideAfterInstall);
+    return () => {
+      window.clearTimeout(openPrompt);
+      window.removeEventListener("beforeinstallprompt", captureInstall);
+      window.removeEventListener("appinstalled", hideAfterInstall);
+    };
+  }, []);
+
+  const install = async () => {
+    if (!installEvent) {
+      setShowHelp(true);
+      return;
+    }
+    await installEvent.prompt();
+    const result = await installEvent.userChoice;
+    if (result.outcome === "accepted") setVisible(false);
+    setInstallEvent(null);
+  };
+
+  const skip = () => {
+    sessionStorage.setItem("ghazali-install-skipped", "1");
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div className="install-app-overlay no-print" role="dialog" aria-modal="true" aria-labelledby="install-app-title">
+      <section className="install-app-card">
+        <img src={`${import.meta.env.BASE_URL}icons/ghazali-icon.svg`} alt="" className="install-app-icon" />
+        <div className="install-app-copy">
+          <h2 id="install-app-title">ثبت تطبيق نظام الغزالي</h2>
+          <p>يعمل بسرعة على الهاتف والحاسوب، ويحفظ عملك على الجهاز حتى بدون إنترنت.</p>
+          {showHelp && (
+            <p className="install-app-help">من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</p>
+          )}
+        </div>
+        <div className="install-app-actions">
+          <button type="button" className="btn install-app-confirm" onClick={install}>ثبت التطبيق</button>
+          <button type="button" className="btn install-app-skip" onClick={skip}>تخطي</button>
+        </div>
+      </section>
+    </div>
+  );
+}
 
 function LoginScreen() {
   return (
@@ -174,6 +239,7 @@ function AppShell() {
 export default function App() {
   return (
     <>
+      <InstallAppPrompt />
       <LoginScreen />
       <SettingsLockModal />
       <WipeLockModal />
