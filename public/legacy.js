@@ -59,16 +59,26 @@
 
             const cloud = window.ghazaliCloud;
             if(!cloud?.available) return;
-            if(!state.settings.cloudSyncKey) {
-                state.settings.cloudSyncKey = cloud.createSyncKey();
-                await writeLocalOnly("settings", state.settings);
-            }
             try {
-                await cloud.initialize(state.settings.cloudSyncKey);
+                cloud.cancelPending?.();
+                const previousSyncKey = state.settings.cloudSyncKey || '';
+                const personalSyncKey = cloud.personalSyncKey;
+                const adoptingPersonalCloud = previousSyncKey !== personalSyncKey;
+                state.settings.cloudSyncKey = personalSyncKey;
+                await writeLocalOnly("settings", state.settings);
+                await cloud.initialize(personalSyncKey);
                 const remote = await cloud.pull();
                 const localSyncAt = Number(state.settings.cloudSyncAt) || 0;
-                if(remote?.data && remote.updatedAt > localSyncAt) {
-                    await replaceLocalSnapshot(remote.data, remote.updatedAt);
+                const localSize = state.contacts.length + state.transactions.length;
+                const remoteSize = remote?.data
+                    ? (remote.data.contacts?.length || 0) + (remote.data.transactions?.length || 0)
+                    : 0;
+                const shouldUseRemote = remote?.data && (
+                    (adoptingPersonalCloud && remoteSize > 0 && localSize === 0)
+                    || (remote.updatedAt > localSyncAt && !(adoptingPersonalCloud && localSize > 0 && remoteSize === 0))
+                );
+                if(shouldUseRemote) {
+                    await replaceLocalSnapshot(remote.data, remote.updatedAt, personalSyncKey);
                 } else {
                     const updatedAt = await cloud.push(cloudSnapshot());
                     if(updatedAt) {
@@ -103,10 +113,9 @@
             });
         }
 
-        async function replaceLocalSnapshot(snapshot, updatedAt) {
+        async function replaceLocalSnapshot(snapshot, updatedAt, syncKey = state.settings.cloudSyncKey) {
             if(!snapshot || !Array.isArray(snapshot.contacts) || !Array.isArray(snapshot.transactions) || !snapshot.settings) return;
-            const localKey = state.settings.cloudSyncKey;
-            const nextSettings = { ...snapshot.settings, cloudSyncKey:localKey, cloudSyncAt:updatedAt };
+            const nextSettings = { ...snapshot.settings, cloudSyncKey:syncKey, cloudSyncAt:updatedAt };
             await new Promise((resolve,reject) => {
                 const tx = db.transaction(['contacts','transactions','settings'], 'readwrite');
                 const contactsStore = tx.objectStore('contacts');
@@ -888,6 +897,8 @@
             const s = state.settings; const lk = settLocked ? 'disabled' : ''; const btnCls = settLocked ? 'btn-danger' : 'btn-success'; const btnTxt = settLocked ? '🔒 تعديل الجباية والخصم (مقفل)' : '🔓 تعديل الجباية والخصم (مفتوح)';
             const fiscalYear = escapeHTML(s.fiscalYear || new Date().getFullYear());
             const lastBackup = s.lastBackupAt ? new Date(s.lastBackupAt).toLocaleString('ar-IQ') : 'لم تُنشأ نسخة بعد';
+            const cloudReady = Boolean(window.ghazaliCloud?.available && s.cloudSyncKey === window.ghazaliCloud?.personalSyncKey);
+            const lastCloudSync = s.cloudSyncAt ? new Date(s.cloudSyncAt).toLocaleString('ar-IQ') : 'بانتظار أول مزامنة';
             m.innerHTML = `<div class="page-header"><div class="page-title">إعدادات النظام</div></div><div class="card" style="max-width:550px; margin:auto;">
                 <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-bottom:10px;">
                     <div style="padding:8px; text-align:center; border-radius:10px; background:#f2f3ff; color:#343170;"><small>السنة</small><strong style="display:block; margin-top:3px;">${fiscalYear}</strong></div>
@@ -913,6 +924,13 @@
                     <button class="btn btn-success" style="flex:1" onclick="exportData()">📤 تصدير نسخة</button>
                     <button class="btn btn-primary" style="flex:1" onclick="document.getElementById('imp-f').click()">📥 استيراد نسخة</button>
                     <input type="file" id="imp-f" class="hidden" onchange="importData(event)">
+                </div>
+                <div style="margin-top:14px; padding:12px; border:1px solid #b9ddd6; border-radius:12px; background:linear-gradient(180deg,#f2fffc,#e7f7f4);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px;">
+                        <strong style="color:#176b68;">☁️ مزامنة الأجهزة</strong>
+                        <span style="padding:4px 10px; border-radius:999px; background:${cloudReady?'#d8f5e9':'#ffe6e6'}; color:${cloudReady?'#137456':'#a02b3b'}; font-size:.74rem; font-weight:900;">${cloudReady?'متصلة':'غير متصلة'}</span>
+                    </div>
+                    <p style="margin:0; color:#555870; font-size:.8rem; line-height:1.6;">آخر مزامنة: <strong>${escapeHTML(lastCloudSync)}</strong><br>هذه قاعدة شخصية واحدة؛ أي جهاز يفتح نفس البرنامج يجلب الأسماء والمعاملات نفسها تلقائياً.</p>
                 </div>
                 <div style="margin-top:14px; padding:12px; border:1px solid #c8c9ef; border-radius:12px; background:linear-gradient(180deg,#f7f7ff,#eceefe);">
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;">

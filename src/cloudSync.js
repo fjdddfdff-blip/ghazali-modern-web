@@ -5,6 +5,7 @@ const getSnapshot = makeFunctionReference("sync:getSnapshot");
 const saveSnapshot = makeFunctionReference("sync:saveSnapshot");
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const personalSyncKey = "vR3RgoeJPQXv7Oq0Pj5vqqi7yD9i3nT6kC2mW8aZfHs";
 
 const toBase64 = (bytes) => {
   let binary = "";
@@ -25,7 +26,7 @@ const createSyncKey = () => {
 export function installCloudSync() {
   const convexUrl = import.meta.env.VITE_CONVEX_URL;
   if (!convexUrl) {
-    window.ghazaliCloud = { available: false, createSyncKey };
+    window.ghazaliCloud = { available: false, createSyncKey, personalSyncKey };
     return;
   }
 
@@ -98,6 +99,12 @@ export function installCloudSync() {
     pendingTimer = setTimeout(flush, 900);
   };
 
+  const cancelPending = () => {
+    clearTimeout(pendingTimer);
+    pendingTimer = undefined;
+    snapshotProvider = undefined;
+  };
+
   window.addEventListener("online", flush);
   window.ghazaliCloud = {
     available: true,
@@ -107,5 +114,7 @@ export function installCloudSync() {
     push,
     schedule,
     flush,
+    cancelPending,
+    personalSyncKey,
   };
 }
