@@ -1,4 +1,4 @@
-const CACHE_NAME = "ghazali-pwa-v1";
+const CACHE_NAME = "ghazali-pwa-v2";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./legacy.js", "./icons/ghazali-icon.svg"];
 
 self.addEventListener("install", (event) => {
