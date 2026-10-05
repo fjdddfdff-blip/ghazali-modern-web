@@ -45,7 +45,8 @@
         let dailyInvoiceDate = new Date().toISOString().split('T')[0];
         let dailySearchTerm = "";
         let dailyPriceSearchTerm = "";
-        let voucherHistoryDate = new Date().toISOString().split('T')[0];
+        let voucherHistoryDate = new Date().toLocaleDateString('en-CA');
+        let statementViewMode = 'detailed';
         let settLocked = true;
 
         async function load() {
@@ -601,8 +602,9 @@
             const footer = document.getElementById('v-history-footer');
             if(!body) return;
             const q = (document.getElementById('v-search')?.value || '').trim().toLowerCase();
+            const selectedDate = document.getElementById('v-date')?.value || voucherHistoryDate;
             const cMap = {}; state.contacts.forEach(c => cMap[c.id] = c.name);
-            let filtered = state.transactions.filter(t => t.type === type);
+            let filtered = state.transactions.filter(t => t.type === type && String(t.date).split('T')[0] === selectedDate);
             if(q) filtered = filtered.filter(t => String(t.id).includes(q) || (cMap[t.contactId]||'').toLowerCase().includes(q));
             filtered.sort((a,b)=>new Date(b.date)-new Date(a.date));
             let totalAmt = 0;
@@ -659,7 +661,22 @@
 
         function renderStatement(m) {
             m.innerHTML = `<div class="page-header no-print"><div class="page-title">كشف حساب</div><div class="page-actions"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ طباعة</button><button class="btn btn-success btn-sm whatsapp-btn" onclick="shareViaWhatsApp('كشف حساب')">🟢 واتساب</button></div></div>
-                <div class="card no-print statement-filters" style="display:grid; grid-template-columns: 1fr 1fr auto; gap:8px; align-items:end;"><div class="statement-name-filter"><label for="st-search">الاسم</label><input list="global-contacts-list" id="st-search" oninput="drawSt();autoCompleteName(event)" onchange="drawSt()" placeholder="اكتب أول حرف من الاسم..." autocomplete="off" style="margin:0;"></div><div><label>من</label><input type="date" id="st-from" onchange="drawSt()" style="margin:0;"></div><div><label>إلى</label><input type="date" id="st-to" onchange="drawSt()" style="margin:0;"></div><button class="btn btn-primary" onclick="drawSt()">عرض</button></div><div id="st-res"></div>`;
+                <div class="card no-print statement-filters" style="display:grid; grid-template-columns:1fr 1fr minmax(230px,.8fr) auto; gap:8px; align-items:end;">
+                    <div class="statement-name-filter"><label for="st-search">الاسم</label><input list="global-contacts-list" id="st-search" oninput="drawSt();autoCompleteName(event)" onchange="drawSt()" placeholder="اكتب أول حرف من الاسم..." autocomplete="off" style="margin:0;"></div>
+                    <div><label>من</label><input type="date" id="st-from" onchange="drawSt()" style="margin:0;"></div>
+                    <div><label>إلى</label><input type="date" id="st-to" onchange="drawSt()" style="margin:0;"></div>
+                    <div class="statement-view-filter"><label>نوع العرض</label><div class="statement-view-toggle" role="group" aria-label="نوع عرض كشف الحساب"><button id="st-view-detailed" type="button" class="btn ${statementViewMode==='detailed'?'btn-primary':'btn-light'}" onclick="setStatementView('detailed')">تفصيلي</button><button id="st-view-summary" type="button" class="btn ${statementViewMode==='summary'?'btn-primary':'btn-light'}" onclick="setStatementView('summary')">إجمالي</button></div></div>
+                    <button class="btn btn-primary" onclick="drawSt()">عرض</button>
+                </div><div id="st-res"></div>`;
+        }
+
+        function setStatementView(mode) {
+            statementViewMode = mode === 'summary' ? 'summary' : 'detailed';
+            const detailedButton = document.getElementById('st-view-detailed');
+            const summaryButton = document.getElementById('st-view-summary');
+            if(detailedButton) detailedButton.className = `btn ${statementViewMode==='detailed'?'btn-primary':'btn-light'}`;
+            if(summaryButton) summaryButton.className = `btn ${statementViewMode==='summary'?'btn-primary':'btn-light'}`;
+            drawSt();
         }
 
         function statementMoveKind(t, c) {
@@ -680,33 +697,49 @@
             };
             txs.forEach(t => { const d=t.date.split('T')[0]; if(fromD && d<fromD) bal += effect(t); });
             const visible = txs.filter(t => { const d=t.date.split('T')[0]; return (!fromD||d>=fromD)&&(!toD||d<=toD); });
-
-            // التجميع يكون حسب اليوم ونوع الحركة معاً: بيع وحده، شراء وحده، قبض وحده، دفع وحده.
-            const groups = {};
-            visible.forEach(t => {
-                const date=t.date.split('T')[0], kind=statementMoveKind(t,c), key=date+'||'+kind;
-                if(!groups[key]) groups[key]={date,kind,items:[],firstTime:t.date};
-                groups[key].items.push(t);
-                if(new Date(t.date)<new Date(groups[key].firstTime)) groups[key].firstTime=t.date;
-            });
-
             let rows='';
-            Object.values(groups).sort((a,b)=>new Date(a.firstTime)-new Date(b.firstTime)).forEach(g => {
-                seq++; let debit=0, credit=0, totalQty=0;
-                g.items.forEach(t => {
-                    const isI=t.type==='فاتورة', isB=t.contactId===c.id;
-                    if(isI) { totalQty += Number(t.details?.tQty||0); if(isB) debit += Number(t.amount||0); else credit += Number(t.details?.sellerCredit||0); }
-                    else if(t.type==='قبض') credit += Number(t.amount||0); else if(t.type==='دفع') debit += Number(t.amount||0);
+            if(statementViewMode === 'summary') {
+                // العرض الإجمالي يجمع حركات اليوم والنوع، ويعرض مجموع العدد والسعر الكلي للفواتير.
+                const groups = {};
+                visible.forEach(t => {
+                    const date=t.date.split('T')[0], kind=statementMoveKind(t,c), key=date+'||'+kind;
+                    if(!groups[key]) groups[key]={date,kind,items:[],firstTime:t.date};
+                    groups[key].items.push(t);
+                    if(new Date(t.date)<new Date(groups[key].firstTime)) groups[key].firstTime=t.date;
                 });
-                bal += debit-credit;
-                const label = g.kind==='بيع' ? 'مبيعات' : g.kind==='شراء' ? 'مشتريات' : g.kind==='قبض' ? 'وصل قبض' : g.kind==='دفع' ? 'وصل دفع' : g.kind==='واصل بواسطة الفاتورة' ? 'واصل بواسطة الفاتورة' : g.kind;
-                rows += `<tr ondblclick="openStatementGroupDetails('${g.date}', '${g.kind}', ${JSON.stringify(c.id)})" title="انقر مرتين لعرض تفاصيل ${label}" style="cursor:pointer;">
-                    <td>${seq}</td><td>${c.name}</td><td>${g.date}</td><td>${label} (${g.items.length})</td><td>${totalQty || '-'}</td>
-                    <td>${debit.toFixed(2)}</td><td>${credit.toFixed(2)}</td><td style="font-weight:900">${bal.toFixed(2)}</td></tr>`;
-            });
-            document.getElementById('st-res').innerHTML = `<div class="print-only-header"><h2>كشف حساب: ${c.name}</h2><span class="date">التاريخ: ${getPrintDate()}</span></div>
-                <div class="card" style="padding:0; overflow:hidden;"><table><thead><tr><th>ت</th><th>الزبون</th><th>التاريخ</th><th>الحالة</th><th>مجموع العدد</th><th>عليه</th><th>له</th><th>الرصيد</th></tr></thead>
-                <tbody>${rows || '<tr><td colspan="8" style="text-align:center">لا توجد حركات</td></tr>'}</tbody></table></div>`;
+                Object.values(groups).sort((a,b)=>new Date(a.firstTime)-new Date(b.firstTime)).forEach(g => {
+                    seq++; let debit=0, credit=0, totalQty=0, totalPrice=0;
+                    g.items.forEach(t => {
+                        const isI=t.type==='فاتورة', isB=t.contactId===c.id;
+                        if(isI) { totalQty += Number(t.details?.tQty||0); totalPrice += Number(t.details?.raw||0); if(isB) debit += Number(t.amount||0); else credit += Number(t.details?.sellerCredit||0); }
+                        else if(t.type==='قبض') credit += Number(t.amount||0); else if(t.type==='دفع') debit += Number(t.amount||0);
+                    });
+                    bal += debit-credit;
+                    const label = g.kind==='بيع' ? 'مبيعات' : g.kind==='شراء' ? 'مشتريات' : g.kind==='قبض' ? 'وصل قبض' : g.kind==='دفع' ? 'وصل دفع' : g.kind==='واصل بواسطة الفاتورة' ? 'واصل بواسطة الفاتورة' : g.kind;
+                    rows += `<tr><td>${seq}</td><td>${c.name}</td><td>${g.date}</td><td>${label}</td><td>${totalQty || '-'}</td><td>${totalQty ? totalPrice.toFixed(2) : '-'}</td><td>${debit.toFixed(2)}</td><td>${credit.toFixed(2)}</td><td style="font-weight:900">${bal.toFixed(2)}</td><td class="no-print">—</td></tr>`;
+                });
+            } else {
+                // العرض التفصيلي يعرض كل فاتورة أو سند كسطر مباشر بلا نافذة تفاصيل.
+                visible.forEach(t => {
+                    seq++;
+                    const isI=t.type==='فاتورة', isB=t.contactId===c.id;
+                    let debit=0, credit=0, qty='-', price='-';
+                    if(isI) {
+                        qty = Number(t.details?.tQty||0);
+                        const raw = Number(t.details?.raw||0);
+                        price = qty ? (raw/qty).toFixed(2) : '0.00';
+                        if(isB) debit = Number(t.amount||0); else credit = Number(t.details?.sellerCredit||0);
+                    }
+                    else if(t.type==='قبض') credit += Number(t.amount||0); else if(t.type==='دفع') debit += Number(t.amount||0);
+                    bal += debit-credit;
+                    const kind=statementMoveKind(t,c), label = kind==='بيع' ? 'مبيعات' : kind==='شراء' ? 'مشتريات' : kind==='قبض' ? 'وصل قبض' : kind==='دفع' ? 'وصل دفع' : kind==='واصل بواسطة الفاتورة' ? 'واصل بواسطة الفاتورة' : kind;
+                    rows += `<tr><td>${seq}</td><td>${c.name}</td><td>${String(t.date).replace('T',' ').slice(0,16)}</td><td>${label}</td><td>${qty}</td><td>${price}</td><td>${debit.toFixed(2)}</td><td>${credit.toFixed(2)}</td><td style="font-weight:900">${bal.toFixed(2)}</td><td class="no-print">${transactionActionButtons(t.id)}</td></tr>`;
+                });
+            }
+            const viewLabel = statementViewMode === 'summary' ? 'إجمالي' : 'تفصيلي';
+            document.getElementById('st-res').innerHTML = `<div class="print-only-header"><h2>كشف حساب ${viewLabel}: ${c.name}</h2><span class="date">التاريخ: ${getPrintDate()}</span></div>
+                <div class="card statement-results" style="padding:0; overflow:auto;"><table><thead><tr><th>ت</th><th>الزبون</th><th>التاريخ</th><th>الحالة</th><th>العدد</th><th>السعر</th><th>عليه</th><th>له</th><th>الرصيد</th><th class="no-print">إجراء</th></tr></thead>
+                <tbody>${rows || '<tr><td colspan="10" style="text-align:center">لا توجد حركات</td></tr>'}</tbody></table></div>`;
         }
 
         function getStatementTxNo(tx) {

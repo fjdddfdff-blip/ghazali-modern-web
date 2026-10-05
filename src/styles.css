@@ -1114,7 +1114,36 @@ body.dashboard-page .global-footer{display:none!important;}
 
 @media screen {
   .statement-filters {
-    grid-template-columns: 1fr 1fr auto !important;
+    grid-template-columns: 1fr 1fr minmax(230px, .8fr) auto !important;
+  }
+
+  .statement-view-filter {
+    min-width: 230px;
+  }
+
+  .statement-view-toggle {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .statement-view-toggle .btn {
+    width: 100%;
+    min-height: 34px;
+    margin: 0;
+    padding: .4rem .7rem;
+  }
+
+  .statement-view-toggle .btn-light {
+    color: #334155 !important;
+    text-shadow: none !important;
+    background: linear-gradient(to bottom, #fff, #e2e8f0) !important;
+    border: 1px solid #94a3b8 !important;
+    box-shadow: 0 3px 0 #64748b, inset 0 2px 3px rgba(255,255,255,.9) !important;
+  }
+
+  .statement-results table {
+    min-width: 980px;
   }
 
   .statement-name-filter {
@@ -1146,6 +1175,11 @@ body.dashboard-page .global-footer{display:none!important;}
 @media screen and (max-width: 600px) {
   .statement-filters {
     grid-template-columns: 1fr 1fr !important;
+  }
+
+  .statement-view-filter {
+    grid-column: 1 / -1;
+    min-width: 0;
   }
 
   .statement-filters > .btn {
