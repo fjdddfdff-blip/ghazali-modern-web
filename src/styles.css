@@ -1113,6 +1113,59 @@ body.dashboard-page .global-footer{display:none!important;}
 }
 
 @media screen {
+  .report-results {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 15px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .report-group-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .report-card-close {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #991b1b;
+    border-radius: 9px;
+    color: #fff;
+    font-size: 1.45rem;
+    font-weight: 900;
+    line-height: 1;
+    background: linear-gradient(to bottom, #f87171, #dc2626);
+    box-shadow: 0 3px 0 #7f1d1d, inset 0 2px 3px rgba(255,255,255,.45);
+  }
+
+  .report-table-scroll {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .report-data-table {
+    width: 100%;
+    margin: 0;
+  }
+
   .statement-filters {
     grid-template-columns: 1fr 1fr minmax(230px, .8fr) auto !important;
   }
@@ -1687,6 +1740,79 @@ body.dashboard-page .global-footer{display:none!important;}
 }
 
 @media screen and (max-width: 760px) {
+  body.report-card-expanded {
+    overflow: hidden !important;
+  }
+
+  .report-results {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-rows: auto !important;
+    gap: 10px !important;
+  }
+
+  .report-group-card {
+    height: auto !important;
+    min-height: 0;
+    cursor: pointer;
+  }
+
+  .report-group-card.is-expanded {
+    position: fixed;
+    inset: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+    z-index: 10020;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border: 2px solid #4f46e5;
+    border-radius: 14px !important;
+    background: #f8fafc;
+    box-shadow: 0 24px 70px rgba(15,23,42,.55);
+    cursor: default;
+  }
+
+  .report-group-card.is-expanded .group-header {
+    flex: 0 0 auto;
+  }
+
+  .report-group-card.is-expanded .report-card-close {
+    display: inline-flex;
+  }
+
+  .report-group-card.is-expanded .report-table-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+  }
+
+  .report-data-table th,
+  .report-data-table td {
+    padding: 6px 4px !important;
+    font-size: .76rem !important;
+    white-space: nowrap;
+  }
+
+  .report-table-sales {
+    min-width: 100% !important;
+    table-layout: fixed;
+  }
+
+  .report-table-purchases {
+    min-width: 650px !important;
+  }
+
+  .report-data-table .row-actions {
+    gap: 3px;
+  }
+
+  .report-data-table .row-actions .btn {
+    min-width: 28px !important;
+    width: 28px !important;
+    padding-inline: 2px !important;
+  }
+
   #sidebar {
     width: min(300px, 86vw) !important;
     padding: 8px !important;

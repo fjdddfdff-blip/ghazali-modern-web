@@ -851,7 +851,7 @@
                     <button class="btn btn-primary" style="flex:1" onclick="drawRep('sales')">تقرير المبيعات</button>
                     <button class="btn btn-success" style="flex:1" onclick="drawRep('purchases')">تقرير المشتريات</button>
                 </div>
-                <div id="rep-res" style="display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 15px;"></div>`;
+                <div id="rep-res" class="report-results"></div>`;
             drawRep('sales');
         }
         
@@ -889,6 +889,19 @@
             drawRep('purchases');
         }
 
+        function expandReportCard(card, event) {
+            if(window.innerWidth > 760 || event?.target?.closest('button, a, input, select, textarea')) return;
+            document.querySelectorAll('.report-group-card.is-expanded').forEach(item => item.classList.remove('is-expanded'));
+            card.classList.add('is-expanded');
+            document.body.classList.add('report-card-expanded');
+        }
+
+        function closeReportCard(event, button) {
+            event.stopPropagation();
+            button.closest('.report-group-card')?.classList.remove('is-expanded');
+            if(!document.querySelector('.report-group-card.is-expanded')) document.body.classList.remove('report-card-expanded');
+        }
+
         function drawRep(type) {
             window.currentRepType = type; const isS = type==='sales', from = document.getElementById('rep-from')?.value, to = document.getElementById('rep-to')?.value, nameSearch = document.getElementById('rep-search')?.value.toLowerCase() || '';
             let gQ=0, gR=0, gFD=0, gN=0, html='', groups={}; const cMap = {}; state.contacts.forEach(c => cMap[c.id] = c); 
@@ -916,7 +929,7 @@
                 const reportFoot = isS
                     ? `<tr><td>المجموع</td><td>${g.q}</td><td>-</td><td>${g.n.toFixed(2)}</td><td class="no-print"></td></tr>`
                     : `<tr><td>المجموع</td><td>${g.q}</td><td>-</td><td>${g.r.toFixed(2)}</td><td>${g.fd.toFixed(2)}</td><td>${g.n.toFixed(2)}</td>${footExtra}</tr>`;
-                html += `<div class="card" style="padding:0; overflow:hidden; margin-bottom:0; display:flex; flex-direction:column; height:100%;"><div class="print-only-header"><h2>تقرير ${isS?'المبيعات':'المشتريات'}</h2><span class="date">التاريخ: ${getPrintDate()}</span></div><div class="group-header"><span>${n}</span></div><div style="flex:1; overflow-y:auto;"><table><thead>${reportHead}</thead><tbody>${rows}</tbody></table></div><table style="margin-top:auto;"><tfoot class="tfoot-yellow">${reportFoot}</tfoot></table></div>`;
+                html += `<div class="card report-group-card" style="padding:0; margin-bottom:0;" onclick="expandReportCard(this,event)"><div class="print-only-header"><h2>تقرير ${isS?'المبيعات':'المشتريات'}</h2><span class="date">التاريخ: ${getPrintDate()}</span></div><div class="group-header"><span>${n}</span><button type="button" class="report-card-close no-print" onclick="closeReportCard(event,this)" aria-label="إغلاق التقرير" title="إغلاق">×</button></div><div class="report-table-scroll"><table class="report-data-table ${isS?'report-table-sales':'report-table-purchases'}"><thead>${reportHead}</thead><tbody>${rows}</tbody><tfoot class="tfoot-yellow">${reportFoot}</tfoot></table></div></div>`;
             }
             document.getElementById('rep-res').innerHTML = html;
             document.getElementById('global-footer-container').innerHTML = isS
