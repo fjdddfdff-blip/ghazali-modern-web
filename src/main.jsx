@@ -9,6 +9,13 @@ installCloudSync();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
+    const updatingExistingApp = Boolean(navigator.serviceWorker.controller);
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!updatingExistingApp || reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
       scope: import.meta.env.BASE_URL,
     }).catch((error) => {

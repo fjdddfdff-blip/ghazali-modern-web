@@ -1,4 +1,4 @@
-const CACHE_NAME = "ghazali-pwa-v2";
+const CACHE_NAME = "ghazali-pwa-v3";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./legacy.js", "./icons/ghazali-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -30,6 +30,21 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match("./")),
+    );
+    return;
+  }
+
+  if (request.destination === "script" || request.destination === "style") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request)),
     );
     return;
   }

@@ -474,6 +474,7 @@
         }
         async function saveInv() {
             if(state.invoiceItems.length===0) return;
+            const invoiceGroupId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
             for(let item of state.invoiceItems) {
                 const b = await findOrCreateC(item.buyer), s = await findOrCreateC(item.seller);
                 const sett = state.settings;
@@ -482,7 +483,7 @@
                 b.balance += finalB; s.balance -= finalS;
                 const pickedInvoiceDate = document.getElementById('i-date')?.value || new Date().toLocaleDateString('en-CA');
                 const nowTime = new Date().toTimeString().slice(0,8);
-                const newTx = { id: Date.now()+Math.random(), date: pickedInvoiceDate + 'T' + nowTime, type: 'فاتورة', contactId: b.id, secondaryId: s.id, amount: finalB, details: { tQty: item.qty, raw, sellerCredit: finalS, bFee, sTotalDisc: raw - finalS } };
+                const newTx = { id: Date.now()+Math.random(), date: pickedInvoiceDate + 'T' + nowTime, type: 'فاتورة', contactId: b.id, secondaryId: s.id, amount: finalB, details: { tQty: item.qty, raw, sellerCredit: finalS, bFee, sTotalDisc: raw - finalS, invoiceGroupId } };
                 state.transactions.push(newTx);
                 await dbSave("transactions", newTx);
                 await dbSave("contacts", b);
@@ -659,12 +660,21 @@
 
         function printSelectedVoucher(type){ window.print(); }
 
+        function openDatePicker(id) {
+            const field = document.getElementById(id);
+            if(!field) return;
+            try {
+                if(typeof field.showPicker === 'function') { field.showPicker(); return; }
+            } catch (_) { /* Some browsers only allow focus on the date input. */ }
+            field.focus();
+        }
+
         function renderStatement(m) {
             m.innerHTML = `<div class="page-header no-print"><div class="page-title">كشف حساب</div><div class="page-actions"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ طباعة</button><button class="btn btn-success btn-sm whatsapp-btn" onclick="shareViaWhatsApp('كشف حساب')">🟢 واتساب</button></div></div>
                 <div class="card no-print statement-filters" style="display:grid; grid-template-columns:1fr 1fr minmax(230px,.8fr) auto; gap:8px; align-items:end;">
-                    <div class="statement-name-filter"><label for="st-search">الاسم</label><input list="global-contacts-list" id="st-search" oninput="drawSt();autoCompleteName(event)" onchange="drawSt()" placeholder="اكتب أول حرف من الاسم..." autocomplete="off" style="margin:0;"></div>
-                    <div><label>من</label><input type="date" id="st-from" onchange="drawSt()" style="margin:0;"></div>
-                    <div><label>إلى</label><input type="date" id="st-to" onchange="drawSt()" style="margin:0;"></div>
+                    <div class="statement-name-filter"><label for="st-search">الاسم</label><input list="global-contacts-list" id="st-search" oninput="autoCompleteName(event);drawSt()" onchange="drawSt()" placeholder="اكتب أول حرف من الاسم..." autocomplete="off" style="margin:0;"></div>
+                    <div><label for="st-from">من</label><div class="date-picker-field"><input type="date" id="st-from" onclick="openDatePicker('st-from')" onchange="drawSt()"><button type="button" class="date-picker-button" onclick="openDatePicker('st-from')" aria-label="فتح تقويم من" title="اختيار تاريخ البداية">📅</button></div></div>
+                    <div><label for="st-to">إلى</label><div class="date-picker-field"><input type="date" id="st-to" onclick="openDatePicker('st-to')" onchange="drawSt()"><button type="button" class="date-picker-button" onclick="openDatePicker('st-to')" aria-label="فتح تقويم إلى" title="اختيار تاريخ النهاية">📅</button></div></div>
                     <div class="statement-view-filter"><label>نوع العرض</label><div class="statement-view-toggle" role="group" aria-label="نوع عرض كشف الحساب"><button id="st-view-detailed" type="button" class="btn ${statementViewMode==='detailed'?'btn-primary':'btn-light'}" onclick="setStatementView('detailed')">تفصيلي</button><button id="st-view-summary" type="button" class="btn ${statementViewMode==='summary'?'btn-primary':'btn-light'}" onclick="setStatementView('summary')">إجمالي</button></div></div>
                     <button class="btn btn-primary" onclick="drawSt()">عرض</button>
                 </div><div id="st-res"></div>`;
@@ -686,6 +696,14 @@
             return t.type;
         }
 
+        function statementGroupKey(t) {
+            if(t.type !== 'فاتورة') return `voucher:${t.id}`;
+            // Older invoices have no group ID. Their saved timestamp and parties are the best available boundary.
+            return t.details?.invoiceGroupId
+                ? `invoice:${t.details.invoiceGroupId}`
+                : `legacy-invoice:${t.date}:${t.contactId}:${t.secondaryId}`;
+        }
+
         function drawSt() {
             const name = document.getElementById('st-search').value, fromD = document.getElementById('st-from').value, toD = document.getElementById('st-to').value;
             const c = state.contacts.find(x=>x.name===name); if(!c) { document.getElementById('st-res').innerHTML=''; return; }
@@ -699,15 +717,16 @@
             const visible = txs.filter(t => { const d=t.date.split('T')[0]; return (!fromD||d>=fromD)&&(!toD||d<=toD); });
             let rows='';
             if(statementViewMode === 'summary') {
-                // العرض الإجمالي يجمع حركات اليوم والنوع، ويعرض مجموع العدد والسعر الكلي للفواتير.
-                const groups = {};
-                visible.forEach(t => {
-                    const date=t.date.split('T')[0], kind=statementMoveKind(t,c), key=date+'||'+kind;
-                    if(!groups[key]) groups[key]={date,kind,items:[],firstTime:t.date};
-                    groups[key].items.push(t);
-                    if(new Date(t.date)<new Date(groups[key].firstTime)) groups[key].firstTime=t.date;
+                // Each invoice is one row; vouchers remain individual rows so running balances keep their order.
+                const groups = new Map();
+                visible.forEach((t, index) => {
+                    const key = statementGroupKey(t);
+                    if(!groups.has(key)) groups.set(key, {items:[], firstIndex:index, lastTime:t.date, kind:statementMoveKind(t,c)});
+                    const group = groups.get(key);
+                    group.items.push(t);
+                    if(t.date > group.lastTime) group.lastTime = t.date;
                 });
-                Object.values(groups).sort((a,b)=>new Date(a.firstTime)-new Date(b.firstTime)).forEach(g => {
+                [...groups.values()].sort((a,b)=>a.lastTime.localeCompare(b.lastTime) || a.firstIndex-b.firstIndex).forEach(g => {
                     seq++; let debit=0, credit=0, totalQty=0, totalPrice=0;
                     g.items.forEach(t => {
                         const isI=t.type==='فاتورة', isB=t.contactId===c.id;
@@ -716,7 +735,7 @@
                     });
                     bal += debit-credit;
                     const label = g.kind==='بيع' ? 'مبيعات' : g.kind==='شراء' ? 'مشتريات' : g.kind==='قبض' ? 'وصل قبض' : g.kind==='دفع' ? 'وصل دفع' : g.kind==='واصل بواسطة الفاتورة' ? 'واصل بواسطة الفاتورة' : g.kind;
-                    rows += `<tr><td>${seq}</td><td>${c.name}</td><td>${g.date}</td><td>${label}</td><td>${totalQty || '-'}</td><td>${totalQty ? totalPrice.toFixed(2) : '-'}</td><td>${debit.toFixed(2)}</td><td>${credit.toFixed(2)}</td><td style="font-weight:900">${bal.toFixed(2)}</td><td class="no-print">—</td></tr>`;
+                    rows += `<tr><td>${seq}</td><td>${c.name}</td><td>${g.lastTime.replace('T',' ').slice(0,16)}</td><td>${label}</td><td>${totalQty || '-'}</td><td>${totalQty ? totalPrice.toFixed(2) : '-'}</td><td>${debit.toFixed(2)}</td><td>${credit.toFixed(2)}</td><td style="font-weight:900">${bal.toFixed(2)}</td><td class="no-print">—</td></tr>`;
                 });
             } else {
                 // العرض التفصيلي يعرض كل فاتورة أو سند كسطر مباشر بلا نافذة تفاصيل.
@@ -738,7 +757,7 @@
             }
             const viewLabel = statementViewMode === 'summary' ? 'إجمالي' : 'تفصيلي';
             document.getElementById('st-res').innerHTML = `<div class="print-only-header"><h2>كشف حساب ${viewLabel}: ${c.name}</h2><span class="date">التاريخ: ${getPrintDate()}</span></div>
-                <div class="card statement-results" style="padding:0; overflow:auto;"><table><thead><tr><th>ت</th><th>الزبون</th><th>التاريخ</th><th>الحالة</th><th>العدد</th><th>السعر</th><th>عليه</th><th>له</th><th>الرصيد</th><th class="no-print">إجراء</th></tr></thead>
+                <div class="card statement-results" style="padding:0; overflow:auto;"><table><thead><tr><th>ت</th><th>الزبون</th><th>التاريخ</th><th>الحالة</th><th>العدد</th><th>${statementViewMode === 'summary' ? 'السعر الإجمالي' : 'سعر المفردة'}</th><th>عليه</th><th>له</th><th>الرصيد</th><th class="no-print">إجراء</th></tr></thead>
                 <tbody>${rows || '<tr><td colspan="10" style="text-align:center">لا توجد حركات</td></tr>'}</tbody></table></div>`;
         }
 
@@ -842,8 +861,8 @@
             const today = new Date().toISOString().split('T')[0];
             m.innerHTML = `<div class="page-header no-print"><div class="page-title">التقارير</div><div class="page-actions"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ طباعة</button><button class="btn btn-success btn-sm whatsapp-btn" onclick="shareViaWhatsApp('التقارير')">🟢 واتساب</button></div></div>
                 <div class="card no-print report-filters" style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; align-items:end;">
-                    <div><label>من</label><input type="date" id="rep-from" value="${today}" style="margin:0;"></div>
-                    <div><label>إلى</label><input type="date" id="rep-to" value="${today}" style="margin:0;"></div>
+                    <div><label for="rep-from">من</label><div class="date-picker-field"><input type="date" id="rep-from" value="${today}" onclick="openDatePicker('rep-from')"><button type="button" class="date-picker-button" onclick="openDatePicker('rep-from')" aria-label="فتح تقويم من" title="اختيار تاريخ البداية">📅</button></div></div>
+                    <div><label for="rep-to">إلى</label><div class="date-picker-field"><input type="date" id="rep-to" value="${today}" onclick="openDatePicker('rep-to')"><button type="button" class="date-picker-button" onclick="openDatePicker('rep-to')" aria-label="فتح تقويم إلى" title="اختيار تاريخ النهاية">📅</button></div></div>
                     <div><label>بحث بالاسم</label><input type="text" id="rep-search" oninput="drawRep(window.currentRepType)" style="margin:0;"></div>
                     <button class="btn btn-primary" onclick="drawRep(window.currentRepType)">بحث</button>
                 </div>
@@ -942,10 +961,12 @@
         function renderSettings(m) {
             const s = state.settings; const lk = settLocked ? 'disabled' : ''; const btnCls = settLocked ? 'btn-danger' : 'btn-success'; const btnTxt = settLocked ? '🔒 تعديل الجباية والخصم (مقفل)' : '🔓 تعديل الجباية والخصم (مفتوح)';
             const fiscalYear = escapeHTML(s.fiscalYear || new Date().getFullYear());
+            const appVersion = escapeHTML(window.GHAZALI_APP_VERSION || 'غير متاح');
             const lastBackup = s.lastBackupAt ? new Date(s.lastBackupAt).toLocaleString('ar-IQ') : 'لم تُنشأ نسخة بعد';
             const cloudReady = Boolean(window.ghazaliCloud?.available && s.cloudSyncKey === window.ghazaliCloud?.personalSyncKey);
             const lastCloudSync = s.cloudSyncAt ? new Date(s.cloudSyncAt).toLocaleString('ar-IQ') : 'بانتظار أول مزامنة';
             m.innerHTML = `<div class="page-header"><div class="page-title">إعدادات النظام</div></div><div class="card" style="max-width:550px; margin:auto;">
+                <div class="app-version-row"><span>رقم الإصدار</span><strong id="app-version" dir="ltr">${appVersion}</strong></div>
                 <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-bottom:10px;">
                     <div style="padding:8px; text-align:center; border-radius:10px; background:#f2f3ff; color:#343170;"><small>السنة</small><strong style="display:block; margin-top:3px;">${fiscalYear}</strong></div>
                     <div style="padding:8px; text-align:center; border-radius:10px; background:#effaf8; color:#176b68;"><small>الأسماء</small><strong style="display:block; margin-top:3px;">${state.contacts.length}</strong></div>
